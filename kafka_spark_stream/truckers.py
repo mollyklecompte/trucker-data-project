@@ -9,11 +9,15 @@ os.environ['PYSPARK_SUBMIT_ARGS'] = '--packages org.apache.spark:spark-streaming
 
 #    Spark
 from pyspark import SparkContext
-#    Spark Streaming
+#    Spark Streamingfrom pyspark.sql import Row, SparkSession
 from pyspark.streaming import StreamingContext
 #    Kafka
 from pyspark.streaming.kafka import KafkaUtils
 
+#    Function to save only non-empty partitions (called toward end of process)
+def saveRDD(rdd):
+    if not rdd.isEmpty():
+        rdd.saveAsTextFile('hdfs://localhost:8020/trucker-project/trucker-count')
 
 #    Create Spark Context
 sc = SparkContext(appName="TruckerStream_01")
@@ -34,14 +38,20 @@ lineList = lines.map(lambda line: line.split(","))
 #    Grab the trucker name list item "column" by index
 truckers = lineList.map(lambda columns: columns[8])
 
+#    Remove header column
+filteredTruckers = truckers.filter(lambda name: name != "driverName")
+
 #    Assign each trucker name instance a value of 1
-truckersWithValOne = truckers.map(lambda trucker: (trucker,1))
+truckersWithValOne = filteredTruckers.map(lambda trucker: (trucker,1))
 
 #    Count instances of each trucker by name
 truckersCount = truckersWithValOne.reduceByKey(lambda a,b: a+b)
-
+"""
 #    Print results
 truckersCount.pprint()
+"""
+#    Save results as text files in HDFS
+truckersCount.foreachRDD(saveRDD)
 
 
 ssc.start()             # Start the computation
